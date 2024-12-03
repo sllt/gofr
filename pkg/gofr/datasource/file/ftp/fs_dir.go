@@ -2,14 +2,13 @@ package ftp
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"slices"
 	"time"
 
 	"github.com/jlaffaye/ftp"
-
-	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
 // Mkdir creates a directory on the FTP server.
@@ -156,7 +155,7 @@ func (f *fileSystem) RemoveAll(name string) error {
 }
 
 // Stat returns information of the files/directories in the specified directory.
-func (f *fileSystem) Stat(name string) (file_interface.FileInfo, error) {
+func (f *fileSystem) Stat(name string) (fs.FileInfo, error) {
 	status := "ERROR"
 
 	defer f.sendOperationStats(&FileLog{
@@ -248,7 +247,7 @@ func (f *fileSystem) ChDir(dir string) error {
 // ReadDir reads the named directory, returning all its directory entries sorted by filename.
 // If an error occurs reading the directory, ReadDir returns the entries it was able to read before the error, along with the error.
 // It returns the list of files/directories present in the current directory when "." is passed.
-func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
+func (f *fileSystem) ReadDir(dir string) ([]fs.FileInfo, error) {
 	var msg string
 
 	status := "ERROR"
@@ -271,7 +270,7 @@ func (f *fileSystem) ReadDir(dir string) ([]file_interface.FileInfo, error) {
 		return nil, err
 	}
 
-	var fileInfo []file_interface.FileInfo
+	var fileInfo []fs.FileInfo
 
 	for _, entry := range entries {
 		entryPath := path.Join(filepath, entry.Name)

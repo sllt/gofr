@@ -12,8 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
-	file_interface "gofr.dev/pkg/gofr/datasource/file"
 )
 
 func TestRead(t *testing.T) {
@@ -458,7 +456,7 @@ func TestSeek(t *testing.T) {
 
 // The test defined below do not use any mocking. They need an actual ftp server connection.
 func Test_ReadFromCSV(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
+	runFtpTest(t, func(fs *fileSystem) {
 		var csvContent = `Name,Age,Email
 John Doe,30,johndoe@example.com
 Jane Smith,25,janesmith@example.com
@@ -473,38 +471,30 @@ Michael Brown,40,michaelb@example.com`
 			"Michael Brown,40,michaelb@example.com",
 		}
 
-		ctrl := gomock.NewController(t)
-
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
-
-		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-		newCsvFile, _ := fs.Create("temp.csv")
+		csvF, _ := fs.Create("temp.csv")
+		newCsvFile := csvF.(*file)
 
 		_, err := newCsvFile.Write([]byte(csvContent))
 		if err != nil {
 			t.Errorf("Write method failed: %v", err)
 		}
 
-		newCsvFile, _ = fs.Open("temp.csv")
+		csvF, _ = fs.Open("temp.csv")
+		newCsvFile = csvF.(*file)
 
-		defer func(fs file_interface.FileSystem, name string) {
+		defer func(fs *fileSystem, name string) {
 			_ = fs.Remove(name)
 		}(fs, "temp.csv")
 
 		var i = 0
 
-		reader, _ := newCsvFile.ReadAll()
+		rr, _ := newCsvFile.ReadAll()
+		reader := rr.(*textReader)
+
 		for reader.Next() {
 			var content string
 
-			err := reader.Scan(&content)
+			err = reader.Scan(&content)
 
 			assert.Equal(t, csvValue[i], content)
 			assert.NoError(t, err)
@@ -515,28 +505,19 @@ Michael Brown,40,michaelb@example.com`
 }
 
 func Test_ReadFromCSVScanError(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
+	runFtpTest(t, func(fs *fileSystem) {
 		var csvContent = `Name,Age,Email`
 
-		ctrl := gomock.NewController(t)
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
-
-		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-		newCsvFile, _ := fs.Create("temp.csv")
+		csvF, _ := fs.Create("temp.csv")
+		newCsvFile := csvF.(*file)
 
 		_, _ = newCsvFile.Write([]byte(csvContent))
-		newCsvFile, _ = fs.Open("temp.csv")
+		csvF, _ = fs.Open("temp.csv")
 
-		reader, _ := newCsvFile.ReadAll()
+		rr, _ := newCsvFile.ReadAll()
+		reader := rr.(*textReader)
 
-		defer func(fs file_interface.FileSystem, name string) {
+		defer func(fs *fileSystem, name string) {
 			err := fs.Remove(name)
 			if err != nil {
 				t.Error(err)
@@ -555,7 +536,7 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 }
 
 func Test_ReadFromJSONArray(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
+	runFtpTest(t, func(fs *fileSystem) {
 		var jsonContent = `[{"name": "Sam", "age": 123},
 {"name": "Jane", "age": 456},
 {"name": "John", "age": 789},
@@ -572,23 +553,15 @@ func Test_ReadFromJSONArray(t *testing.T) {
 			{"Sam", 123},
 		}
 
-		ctrl := gomock.NewController(t)
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
+		jF, _ := fs.Create("temp.json")
+		jsonF := jF.(*file)
 
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
+		_, _ = jsonF.Write([]byte(jsonContent))
 
-		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+		jF, _ = fs.Open("temp.json")
+		jsonF = jF.(*file)
 
-		newCsvFile, _ := fs.Create("temp.json")
-
-		_, _ = newCsvFile.Write([]byte(jsonContent))
-		newCsvFile, _ = fs.Open("temp.json")
-
-		defer func(fs file_interface.FileSystem, name string) {
+		defer func(fs *fileSystem, name string) {
 			err := fs.Remove(name)
 			if err != nil {
 				t.Error(err)
@@ -597,7 +570,9 @@ func Test_ReadFromJSONArray(t *testing.T) {
 
 		var i = 0
 
-		reader, readerError := newCsvFile.ReadAll()
+		rdr, readerError := jsonF.ReadAll()
+		reader := rdr.(*jsonReader)
+
 		if readerError == nil {
 			for reader.Next() {
 				var u User
@@ -615,7 +590,7 @@ func Test_ReadFromJSONArray(t *testing.T) {
 }
 
 func Test_ReadFromJSONObject(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
+	runFtpTest(t, func(fs *fileSystem) {
 		var jsonContent = `{"name": "Sam", "age": 123}`
 
 		type User struct {
@@ -623,25 +598,17 @@ func Test_ReadFromJSONObject(t *testing.T) {
 			Age  int    `json:"age"`
 		}
 
-		ctrl := gomock.NewController(t)
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
+		jsF, _ := fs.Create("temp.json")
+		jsonFile := jsF.(*file)
 
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
+		_, _ = jsonFile.Write([]byte(jsonContent))
+		jsF, _ = fs.Open("temp.json")
+		jsonFile = jsF.(*file)
 
-		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+		rr, _ := jsonFile.ReadAll()
+		reader := rr.(*jsonReader)
 
-		newCsvFile, _ := fs.Create("temp.json")
-
-		_, _ = newCsvFile.Write([]byte(jsonContent))
-		newCsvFile, _ = fs.Open("temp.json")
-
-		reader, _ := newCsvFile.ReadAll()
-
-		defer func(fs file_interface.FileSystem, name string) {
+		defer func(fs *fileSystem, name string) {
 			err := fs.Remove(name)
 			if err != nil {
 				t.Error(err)
@@ -662,31 +629,22 @@ func Test_ReadFromJSONObject(t *testing.T) {
 }
 
 func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
+	runFtpTest(t, func(fs *fileSystem) {
 		var jsonContent = `!@#$%^&*`
 
-		ctrl := gomock.NewController(t)
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
+		jF, _ := fs.Create("temp.json")
+		jsonF := jF.(*file)
 
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
+		_, _ = jsonF.Write([]byte(jsonContent))
 
-		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+		jsonF.Close()
 
-		newCsvFile, _ := fs.Create("temp.json")
+		jF, _ = fs.Open("temp.json")
+		jsonF = jF.(*file)
 
-		_, _ = newCsvFile.Write([]byte(jsonContent))
+		_, err := jsonF.ReadAll()
 
-		newCsvFile.Close()
-
-		newCsvFile, _ = fs.Open("temp.json")
-
-		_, err := newCsvFile.ReadAll()
-
-		defer func(fs file_interface.FileSystem, name string) {
+		defer func(fs *fileSystem, name string) {
 			removeErr := fs.Remove(name)
 			if removeErr != nil {
 				t.Error(removeErr)
@@ -698,24 +656,14 @@ func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
 }
 
 func Test_DirectoryOperations(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
-		ctrl := gomock.NewController(t)
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
-
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-
+	runFtpTest(t, func(fs *fileSystem) {
 		err := fs.Mkdir("temp1", os.ModePerm)
 		require.NoError(t, err)
 
 		err = fs.Mkdir("temp2", os.ModePerm)
 		require.NoError(t, err)
 
-		defer func(fs file_interface.FileSystem) {
+		defer func(fs *fileSystem) {
 			removeErr := fs.RemoveAll("../temp1")
 			require.NoError(t, removeErr)
 
@@ -758,22 +706,12 @@ func Test_DirectoryOperations(t *testing.T) {
 }
 
 func Test_GetSize(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
-		ctrl := gomock.NewController(t)
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
-
-		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
-		newFile, err := fs.Create("temp.json")
+	runFtpTest(t, func(fs *fileSystem) {
+		nF, err := fs.Create("temp.json")
+		newFile := nF.(*file)
 		require.NoError(t, err)
 
-		defer func(fs file_interface.FileSystem) {
+		defer func(fs *fileSystem) {
 			removeErr := fs.Remove("temp.json")
 			if removeErr != nil {
 				t.Error(removeErr)
@@ -794,22 +732,11 @@ func Test_GetSize(t *testing.T) {
 }
 
 func Test_GetTime(t *testing.T) {
-	runFtpTest(t, func(fs file_interface.FileSystemProvider) {
-		ctrl := gomock.NewController(t)
-		mockLogger := NewMockLogger(ctrl)
-		mockMetrics := NewMockMetrics(ctrl)
-
-		fs.UseLogger(mockLogger)
-		fs.UseMetrics(mockMetrics)
-
-		mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
-		mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
-
+	runFtpTest(t, func(fs *fileSystem) {
 		_, err := fs.Create("temp.json")
 		require.NoError(t, err)
 
-		defer func(fs file_interface.FileSystem) {
+		defer func(fs *fileSystem) {
 			removeErr := fs.Remove("temp.json")
 			require.NoError(t, removeErr)
 		}(fs)
@@ -820,7 +747,7 @@ func Test_GetTime(t *testing.T) {
 	})
 }
 
-func runFtpTest(t *testing.T, testFunc func(fs file_interface.FileSystemProvider)) {
+func runFtpTest(t *testing.T, testFunc func(fs *fileSystem)) {
 	t.Helper()
 
 	config := &Config{
@@ -844,6 +771,8 @@ func runFtpTest(t *testing.T, testFunc func(fs file_interface.FileSystemProvider
 
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().NewHistogram(appFtpStats, gomock.Any(), gomock.Any()).AnyTimes()
 	mockMetrics.EXPECT().RecordHistogram(gomock.Any(), appFtpStats, gomock.Any(),
 		"type", gomock.Any(), "status", gomock.Any()).AnyTimes()
