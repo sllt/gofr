@@ -2,23 +2,22 @@ package sftp
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"testing"
 
 	"github.com/pkg/sftp"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	File "gofr.dev/pkg/gofr/datasource/file"
 )
 
-type mocks struct {
+type mockers struct {
 	client  *MocksftpClient
 	logger  *MockLogger
 	metrics *MockMetrics
-	file    *File.MockFile
 }
 
-func getMocks(t *testing.T) (fileSystem, mocks) {
+func getMocks(t *testing.T) (fileSystem, mockers) {
 	t.Helper()
 
 	ctrl := gomock.NewController(t)
@@ -26,17 +25,15 @@ func getMocks(t *testing.T) (fileSystem, mocks) {
 	mockClient := NewMocksftpClient(ctrl)
 	mockLogger := NewMockLogger(ctrl)
 	mockMetrics := NewMockMetrics(ctrl)
-	mockFile := File.NewMockFile(ctrl)
 
 	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
 	client := fileSystem{logger: mockLogger, metrics: mockMetrics, client: mockClient}
 
-	return client, mocks{
+	return client, mockers{
 		client:  mockClient,
 		logger:  mockLogger,
 		metrics: mockMetrics,
-		file:    mockFile,
 	}
 }
 
@@ -180,10 +177,10 @@ func TestFiles_Create(t *testing.T) {
 	testCases := []struct {
 		desc     string
 		name     string
-		expFile  File.File
+		expFile  any
 		expError error
 	}{
-		{"File Created Successfully", "text.csv", sftpFile{File: &mockSftpFile, logger: mocks.logger}, nil},
+		{"File Created Successfully", "text.csv", &sftpFile{File: &mockSftpFile, logger: mocks.logger}, nil},
 		{"File Creation Failed", "text.csv", nil, errors.New("File Creation Failed")},
 	}
 
@@ -205,10 +202,10 @@ func TestFiles_Open(t *testing.T) {
 	testCases := []struct {
 		desc     string
 		name     string
-		expFile  File.File
+		expFile  any
 		expError error
 	}{
-		{"File Opened Successfully", "text.csv", sftpFile{File: &mockSftpFile, logger: mocks.logger}, nil},
+		{"File Opened Successfully", "text.csv", &sftpFile{File: &mockSftpFile, logger: mocks.logger}, nil},
 		{"File Open Failed", "text.csv", nil, errors.New("File Creation Failed")},
 	}
 
@@ -230,10 +227,10 @@ func TestFiles_OpenFile(t *testing.T) {
 	testCases := []struct {
 		desc     string
 		name     string
-		expFile  File.File
+		expFile  any
 		expError error
 	}{
-		{"File Opened Successfully", "text.csv", sftpFile{File: &mockSftpFile, logger: mocks.logger}, nil},
+		{"File Opened Successfully", "text.csv", &sftpFile{File: &mockSftpFile, logger: mocks.logger}, nil},
 		{"File Open Failed", "text.csv", nil, errors.New("File Open Failed")},
 	}
 
@@ -260,10 +257,10 @@ func TestFiles_ReadDir(t *testing.T) {
 	testCases := []struct {
 		desc     string
 		name     string
-		expFile  []File.FileInfo
+		expFile  []fs.FileInfo
 		expError error
 	}{
-		{"Dir Read Successfully", "text.csv", []File.FileInfo{info}, nil},
+		{"Dir Read Successfully", "text.csv", osFile, nil},
 		{"Dir Read Failed", "text.csv", nil, errors.New("File Creation Failed")},
 	}
 
@@ -288,7 +285,7 @@ func TestFiles_Stat(t *testing.T) {
 	testCases := []struct {
 		desc     string
 		name     string
-		expFile  File.FileInfo
+		expFile  fs.FileInfo
 		expError error
 	}{
 		{"File Stat Successfully Returned", "text.csv", info, nil},

@@ -8,12 +8,13 @@ import (
 	"strings"
 
 	"github.com/pkg/sftp"
-	"gofr.dev/pkg/gofr/datasource/file"
 )
 
 var errNotStringPointer = errors.New("input should be a pointer to a string")
 
 type sftpFile struct {
+	// using sftp.File, the implements the methods required by gofr
+	// to do file operations like Name, IsDir, etc.
 	*sftp.File
 	logger Logger
 }
@@ -49,7 +50,7 @@ type jsonReader struct {
 //		    var content string
 //		    reader.Scan(&u)
 //	}
-func (f sftpFile) ReadAll() (file.RowReader, error) {
+func (f *sftpFile) ReadAll() (any, error) {
 	if strings.HasSuffix(f.File.Name(), ".json") {
 		return f.createJSONReader()
 	}
@@ -58,7 +59,7 @@ func (f sftpFile) ReadAll() (file.RowReader, error) {
 }
 
 // Factory method to create the appropriate JSON reader.
-func (f sftpFile) createJSONReader() (file.RowReader, error) {
+func (f *sftpFile) createJSONReader() (any, error) {
 	decoder := json.NewDecoder(f.File)
 
 	token, err := f.peekJSONToken(decoder)
@@ -77,7 +78,7 @@ func (f sftpFile) createJSONReader() (file.RowReader, error) {
 }
 
 // Peek the first JSON token to determine its type.
-func (sftpFile) peekJSONToken(decoder *json.Decoder) (json.Token, error) {
+func (*sftpFile) peekJSONToken(decoder *json.Decoder) (json.Token, error) {
 	newDecoder := *decoder
 
 	token, err := newDecoder.Token()
@@ -89,7 +90,7 @@ func (sftpFile) peekJSONToken(decoder *json.Decoder) (json.Token, error) {
 }
 
 // Create a JSON reader for a JSON object.
-func (f sftpFile) createJSONObjectReader() (file.RowReader, error) {
+func (f *sftpFile) createJSONObjectReader() (any, error) {
 	name := f.File.Name()
 
 	if err := f.File.Close(); err != nil {
@@ -108,7 +109,7 @@ func (f sftpFile) createJSONObjectReader() (file.RowReader, error) {
 	return &jsonReader{decoder: decoder}, nil
 }
 
-func (f sftpFile) createTextCSVReader() file.RowReader {
+func (f *sftpFile) createTextCSVReader() any {
 	return &textReader{
 		scanner: bufio.NewScanner(f.File),
 		logger:  f.logger,
@@ -116,22 +117,22 @@ func (f sftpFile) createTextCSVReader() file.RowReader {
 }
 
 // Next checks if there is next json object available otherwise returns false.
-func (j jsonReader) Next() bool {
+func (j *jsonReader) Next() bool {
 	return j.decoder.More()
 }
 
 // Scan binds the data to provided struct.
-func (j jsonReader) Scan(i interface{}) error {
+func (j *jsonReader) Scan(i interface{}) error {
 	return j.decoder.Decode(&i)
 }
 
 // Next checks if there is data available in next line otherwise returns false.
-func (f textReader) Next() bool {
+func (f *textReader) Next() bool {
 	return f.scanner.Scan()
 }
 
 // Scan binds the line to provided pointer to string.
-func (f textReader) Scan(i interface{}) error {
+func (f *textReader) Scan(i interface{}) error {
 	// Use a type switch to check if the provided interface is a pointer to a string.
 	switch target := i.(type) {
 	case *string:

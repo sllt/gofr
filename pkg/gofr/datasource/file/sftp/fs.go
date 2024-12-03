@@ -2,14 +2,12 @@ package sftp
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"time"
 
 	"github.com/pkg/sftp"
-
 	"golang.org/x/crypto/ssh"
-
-	File "gofr.dev/pkg/gofr/datasource/file"
 )
 
 type fileSystem struct {
@@ -74,7 +72,7 @@ func (f *fileSystem) Connect() {
 	f.logger.Logf("connected to SFTP client successfully")
 }
 
-func (f *fileSystem) Create(name string) (File.File, error) {
+func (f *fileSystem) Create(name string) (any, error) {
 	status := "ERROR"
 
 	defer f.sendOperationStats(&FileLog{
@@ -90,7 +88,7 @@ func (f *fileSystem) Create(name string) (File.File, error) {
 
 	status = "SUCCESS"
 
-	return sftpFile{
+	return &sftpFile{
 		File:   newFile,
 		logger: f.logger,
 	}, nil
@@ -110,7 +108,7 @@ func (f *fileSystem) Mkdir(name string, _ os.FileMode) error {
 	return nil
 }
 
-func (f *fileSystem) MkdirAll(path string, perm os.FileMode) error {
+func (f *fileSystem) MkdirAll(path string, _ os.FileMode) error {
 	status := "SUCCESS"
 
 	defer f.sendOperationStats(&FileLog{Operation: "MKDIR", Location: path, Status: &status}, time.Now())
@@ -124,7 +122,7 @@ func (f *fileSystem) MkdirAll(path string, perm os.FileMode) error {
 	return nil
 }
 
-func (f *fileSystem) Open(name string) (File.File, error) {
+func (f *fileSystem) Open(name string) (any, error) {
 	status := "SUCCESS"
 
 	defer f.sendOperationStats(&FileLog{Operation: "OPEN", Location: name, Status: &status}, time.Now())
@@ -136,13 +134,13 @@ func (f *fileSystem) Open(name string) (File.File, error) {
 		return nil, err
 	}
 
-	return sftpFile{
+	return &sftpFile{
 		File:   openedFile,
 		logger: f.logger,
 	}, nil
 }
 
-func (f *fileSystem) OpenFile(name string, flag int, perm os.FileMode) (File.File, error) {
+func (f *fileSystem) OpenFile(name string, flag int, _ os.FileMode) (any, error) {
 	status := "SUCCESS"
 
 	defer f.sendOperationStats(&FileLog{Operation: "OPENFILE", Location: name, Status: &status}, time.Now())
@@ -154,7 +152,7 @@ func (f *fileSystem) OpenFile(name string, flag int, perm os.FileMode) (File.Fil
 		return nil, err
 	}
 
-	return sftpFile{
+	return &sftpFile{
 		File:   openedFile,
 		logger: f.logger,
 	}, nil
@@ -203,7 +201,7 @@ func (f *fileSystem) Rename(oldname, newname string) error {
 	return nil
 }
 
-func (f *fileSystem) ReadDir(dir string) ([]File.FileInfo, error) {
+func (f *fileSystem) ReadDir(dir string) ([]fs.FileInfo, error) {
 	status := "SUCCESS"
 
 	defer f.sendOperationStats(&FileLog{Operation: "READDIR", Location: dir, Status: &status}, time.Now())
@@ -214,7 +212,7 @@ func (f *fileSystem) ReadDir(dir string) ([]File.FileInfo, error) {
 		return nil, err
 	}
 
-	newDirs := make([]File.FileInfo, 0, len(dirs))
+	newDirs := make([]fs.FileInfo, 0, len(dirs))
 
 	for _, v := range dirs {
 		newDirs = append(newDirs, v)
@@ -223,7 +221,7 @@ func (f *fileSystem) ReadDir(dir string) ([]File.FileInfo, error) {
 	return newDirs, nil
 }
 
-func (f *fileSystem) Stat(name string) (File.FileInfo, error) {
+func (f *fileSystem) Stat(name string) (fs.FileInfo, error) {
 	status := "SUCCESS"
 
 	defer f.sendOperationStats(&FileLog{Operation: "STAT", Location: name, Status: &status}, time.Now())
@@ -237,7 +235,7 @@ func (f *fileSystem) Stat(name string) (File.FileInfo, error) {
 	return fileInfo, nil
 }
 
-func (f *fileSystem) ChDir(dirname string) error {
+func (f *fileSystem) ChDir(_ string) error {
 	f.logger.Errorf("Chdir is not implemented for SFTP")
 	return nil
 }
