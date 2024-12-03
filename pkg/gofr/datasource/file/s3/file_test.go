@@ -7,21 +7,21 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
 func Test_Write(t *testing.T) {
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		var csvContent = `Name,Age,Email
 John Doe,30,johndoe@example.com
 Jane Smith,25,janesmith@example.com
 Emily Johnson,35,emilyj@example.com
 Michael Brown,40,michaelb@example.com`
 
-		newCsvFile, err := fs.Create("temp.csv")
+		csvF, err := fs.Create("temp.csv")
+		newCsvFile := csvF.(*s3file)
 		require.NoError(t, err, "Failed to create CSV file")
 
-		defer func(fs file.FileSystem, name string) {
+		defer func(fs *fileSystem, name string) {
 			err = fs.Remove(name)
 			require.NoError(t, err, "Error removing file %v", name)
 		}(fs, "temp.csv")
@@ -48,17 +48,18 @@ Michael Brown,40,michaelb@example.com`
 }
 
 func Test_WriteAt(t *testing.T) {
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		var csvContent = `Name,Age,Email
 John Doe,30,johndoe@example.com
 Jane Smith,25,janesmith@example.com
 Emily Johnson,35,emilyj@example.com
 Michael Brown,40,michaelb@example.com`
 
-		newCsvFile, err := fs.Create("temp.csv")
+		csvF, err := fs.Create("temp.csv")
+		newCsvFile := csvF.(*s3file)
 		require.NoError(t, err, "Failed to create CSV file")
 
-		defer func(fs file.FileSystem, name string) {
+		defer func(fs *fileSystem, name string) {
 			err = fs.Remove(name)
 			require.NoError(t, err, "Error removing file %v", name)
 		}(fs, "temp.csv")
@@ -82,17 +83,18 @@ Michael Brown,40,michaelb@example.com`
 }
 
 func Test_Read(t *testing.T) {
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		var csvContent = `Name,Age,Email
 John Doe,30,johndoe@example.com
 Jane Smith,25,janesmith@example.com
 Emily Johnson,35,emilyj@example.com
 Michael Brown,40,michaelb@example.com`
 
-		newCsvFile, err := fs.Create("temp.csv")
+		csvF, err := fs.Create("temp.csv")
+		newCsvFile := csvF.(*s3file)
 		require.NoError(t, err, "TEST Read Failed. Desc: %v", "Failed to create CSV file")
 
-		defer func(fs file.FileSystem, name string) {
+		defer func(fs *fileSystem, name string) {
 			err = fs.Remove(name)
 			require.NoError(t, err, "TEST Read Failed. Desc: %v", "Error removing file %v", name)
 		}(fs, "temp.csv")
@@ -117,17 +119,18 @@ Michael Brown,40,michaelb@example.com`
 }
 
 func Test_ReadAt(t *testing.T) {
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		var csvContent = `Name,Age,Email
 John Doe,30,johndoe@example.com
 Jane Smith,25,janesmith@example.com
 Emily Johnson,35,emilyj@example.com
 Michael Brown,40,michaelb@example.com`
 
-		newCsvFile, err := fs.Create("temp.csv")
+		csvF, err := fs.Create("temp.csv")
+		newCsvFile := csvF.(*s3file)
 		require.NoError(t, err, "Failed to create CSV file")
 
-		defer func(fs file.FileSystem, name string) {
+		defer func(fs *fileSystem, name string) {
 			err = fs.Remove(name)
 			require.NoError(t, err, "Error removing file %v", name)
 		}(fs, "temp.csv")
@@ -148,13 +151,14 @@ Michael Brown,40,michaelb@example.com`
 }
 
 func Test_Seek(t *testing.T) {
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		var jsonContent = `0123456789`
 
-		newCsvFile, err := fs.Create("temp.json")
+		csvF, err := fs.Create("temp.json")
+		newCsvFile := csvF.(*s3file)
 		require.NoError(t, err, "TEST Seek Failed. Desc: %v", "Failed to create JSON file")
 
-		defer func(fs file.FileSystem, name string) {
+		defer func(fs *fileSystem, name string) {
 			removeErr := fs.Remove(name)
 			require.NoError(t, removeErr, "TEST Seek Failed. Desc: %v", "Error removing file %v", name)
 		}(fs, "temp.json")
@@ -192,7 +196,7 @@ func Test_Seek(t *testing.T) {
 }
 
 func Test_ReadFromCSV(t *testing.T) {
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		var csvContent = `Name,Age,Email
 John Doe,30,johndoe@example.com
 Jane Smith,25,janesmith@example.com
@@ -207,10 +211,11 @@ Michael Brown,40,michaelb@example.com`
 			"Michael Brown,40,michaelb@example.com",
 		}
 
-		newCsvFile, err := fs.Create("temp.csv")
+		csvF, err := fs.Create("temp.csv")
+		newCsvFile := csvF.(*s3file)
 		require.NoError(t, err, "TEST ReadFromCSV Failed. Desc: %v", "Failed to create CSV file")
 
-		defer func(fs file.FileSystem, name string) {
+		defer func(fs *fileSystem, name string) {
 			err = fs.Remove(name)
 			require.NoError(t, err, "Error removing file %v", name)
 		}(fs, "temp.csv")
@@ -218,12 +223,15 @@ Michael Brown,40,michaelb@example.com`
 		_, err = newCsvFile.Write([]byte(csvContent))
 		require.NoError(t, err, "TEST ReadFromCSV Failed. Desc: %v", "Failed to write to CSV file")
 
-		newCsvFile, err = fs.Open("temp.csv")
+		csvF, err = fs.Open("temp.csv")
+		newCsvFile = csvF.(*s3file)
 		require.NoError(t, err, "TEST ReadFromCSV Failed. Desc: %v", "Failed to open CSV file")
 
 		var i = 0
 
-		reader, _ := newCsvFile.ReadAll()
+		rd, _ := newCsvFile.ReadAll()
+		reader := rd.(*textReader)
+
 		for reader.Next() {
 			var content string
 
@@ -238,13 +246,14 @@ Michael Brown,40,michaelb@example.com`
 }
 
 func Test_ReadFromCSVScanError(t *testing.T) {
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		var csvContent = `Name,Age,Email`
 
-		newCsvFile, err := fs.Create("temp.csv")
+		csvF, err := fs.Create("temp.csv")
+		newCsvFile := csvF.(*s3file)
 		require.NoError(t, err, "TEST ReadFromCSVScanError Failed. Desc: %v", "Failed to create CSV file")
 
-		defer func(fs file.FileSystem, name string) {
+		defer func(fs *fileSystem, name string) {
 			err = fs.Remove(name)
 			require.NoError(t, err, "TEST ReadFromCSVScanError Failed. Desc: %v", "Error removing file %v", name)
 		}(fs, "temp.csv")
@@ -252,10 +261,12 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 		_, err = newCsvFile.Write([]byte(csvContent))
 		require.NoError(t, err, "TEST ReadFromCSVScanError Failed. Desc: %v", "Failed to write to CSV file")
 
-		newCsvFile, err = fs.Open("temp.csv")
+		csvF, err = fs.Open("temp.csv")
+		newCsvFile = csvF.(*s3file)
 		require.NoError(t, err, "TEST ReadFromCSVScanError Failed. Desc: %v", "Failed to open CSV file")
 
-		reader, err := newCsvFile.ReadAll()
+		rd, err := newCsvFile.ReadAll()
+		reader := rd.(*textReader)
 		require.NoError(t, err, "TEST ReadFromCSVScanError Failed. Desc: %v", "Failed to create reader")
 
 		for reader.Next() {
@@ -270,7 +281,7 @@ func Test_ReadFromCSVScanError(t *testing.T) {
 }
 
 func Test_ReadFromJSONArray(t *testing.T) {
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		var jsonContent = `[{"name": "Sam", "age": 123},
 {"name": "Jane", "age": 456},
 {"name": "John", "age": 789},
@@ -288,23 +299,26 @@ func Test_ReadFromJSONArray(t *testing.T) {
 			{"Sam", 123},
 		}
 
-		newCsvFile, err := fs.Create("temp.json")
+		jF, err := fs.Create("temp.json")
+		jsonFile := jF.(*s3file)
 		require.NoError(t, err, "TEST ReadFromJSONArray Failed. Desc: %v", "Failed to create JSON file")
 
-		defer func(fs file.FileSystem, name string) {
+		defer func(fs *fileSystem, name string) {
 			err = fs.Remove(name)
 			require.NoError(t, err, "TEST ReadFromJSONArray Failed. Desc: %v", "Error removing file %v", name)
 		}(fs, "temp.json")
 
-		_, err = newCsvFile.Write([]byte(jsonContent))
+		_, err = jsonFile.Write([]byte(jsonContent))
 		require.NoError(t, err, "TEST ReadFromJSONArray Failed. Desc: %v", "Failed to write to JSON file")
 
-		newCsvFile, err = fs.Open("temp.json")
+		jF, err = fs.Open("temp.json")
+		jsonFile = jF.(*s3file)
 		require.NoError(t, err, "TEST ReadFromJSONArray Failed. Desc: %v", "Failed to open JSON file")
 
 		var i = 0
 
-		reader, readerError := newCsvFile.ReadAll()
+		rd, readerError := jsonFile.ReadAll()
+		reader := rd.(*jsonReader)
 		require.NoError(t, readerError, "TEST ReadFromJSONArray Failed. Desc: %v", "Error creating Reader")
 
 		if readerError == nil {
@@ -324,7 +338,7 @@ func Test_ReadFromJSONArray(t *testing.T) {
 }
 
 func Test_ReadFromJSONObject(t *testing.T) {
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		var jsonContent = `{"name": "Sam", "age": 123}`
 
 		type User struct {
@@ -332,19 +346,22 @@ func Test_ReadFromJSONObject(t *testing.T) {
 			Age  int    `json:"age"`
 		}
 
-		newCsvFile, err := fs.Create("temp.json")
+		jF, err := fs.Create("temp.json")
+		jsonFile := jF.(*s3file)
 		require.NoError(t, err, "TEST ReadFromJSONObject Failed. Desc: %v", "Failed to create JSON file")
 
-		_, err = newCsvFile.Write([]byte(jsonContent))
+		_, err = jsonFile.Write([]byte(jsonContent))
 		require.NoError(t, err, "TEST ReadFromJSONObject Failed. Desc: %v", "Failed to write to JSON file")
 
-		newCsvFile, err = fs.Open("temp.json")
+		jF, err = fs.Open("temp.json")
+		jsonFile = jF.(*s3file)
 		require.NoError(t, err, "TEST ReadFromJSONObject Failed. Desc: %v", "Failed to open JSON file")
 
-		reader, err := newCsvFile.ReadAll()
+		rd, err := jsonFile.ReadAll()
+		reader := rd.(*jsonReader)
 		require.NoError(t, err, "TEST ReadFromJSONObject Failed. Desc: %v", "Failed to create reader")
 
-		defer func(fs file.FileSystem, name string) {
+		defer func(fs *fileSystem, name string) {
 			err = fs.Remove(name)
 			require.NoError(t, err, "TEST ReadFromJSONObject Failed. Desc: %v", "Error removing file %v", name)
 		}(fs, "temp.json")
@@ -362,27 +379,29 @@ func Test_ReadFromJSONObject(t *testing.T) {
 }
 
 func Test_ReadFromJSONArrayInvalidDelimiter(t *testing.T) {
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		var jsonContent = `!@#$%^&*`
 
-		newCsvFile, err := fs.Create("temp.json")
+		jF, err := fs.Create("temp.json")
+		jsonFile := jF.(*s3file)
 		require.NoError(t, err, "TEST ReadFromJSONArrayInvalidDelimiter Failed. Desc: %v", "Failed to create JSON file")
 
-		defer func(fs file.FileSystem, name string) {
+		defer func(fs *fileSystem, name string) {
 			removeErr := fs.Remove(name)
 			require.NoError(t, removeErr, "Error removing file %v", name)
 		}(fs, "temp.json")
 
-		_, err = newCsvFile.Write([]byte(jsonContent))
+		_, err = jsonFile.Write([]byte(jsonContent))
 		require.NoError(t, err, "TEST ReadFromJSONArrayInvalidDelimiter Failed. Desc: %v", "Failed to write to JSON file")
 
-		err = newCsvFile.Close()
+		err = jsonFile.Close()
 		require.NoError(t, err, "TEST ReadFromJSONArrayInvalidDelimiter Failed. Desc: %v", "Error closing JSON file after write")
 
-		newCsvFile, err = fs.Open("temp.json")
+		jF, err = fs.Open("temp.json")
+		jsonFile = jF.(*s3file)
 		require.NoError(t, err, "TEST ReadFromJSONArrayInvalidDelimiter Failed. Desc: %v", "Error opening JSON file")
 
-		_, err = newCsvFile.ReadAll()
+		_, err = jsonFile.ReadAll()
 		require.Error(t, err, "TEST ReadFromJSONArrayInvalidDelimiter Failed. Desc: %v", "Expected Error reading from invalid JSON")
 
 		assert.IsType(t, &json.SyntaxError{}, err)

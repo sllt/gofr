@@ -115,6 +115,11 @@ func (f *s3file) IsDir() bool {
 	return strings.HasSuffix(f.name, "/")
 }
 
+// Sys returns the underlying data source (in this case, S3) for the file.
+func (f *s3file) Sys() any {
+	return "S3"
+}
+
 // Close closes the response body returned in Open/Create methods if the response body is not nil.
 func (f *s3file) Close() error {
 	bucketName := getBucketName(f.name)

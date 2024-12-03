@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
 var (
@@ -38,7 +36,7 @@ type jsonReader struct {
 }
 
 // ReadAll reads either JSON or text files based on file extension and returns a corresponding RowReader.
-func (f *s3file) ReadAll() (file.RowReader, error) {
+func (f *s3file) ReadAll() (any, error) {
 	bucketName := strings.Split(f.name, string(filepath.Separator))[0]
 
 	var fileName string
@@ -60,7 +58,7 @@ func (f *s3file) ReadAll() (file.RowReader, error) {
 }
 
 // createJSONReader creates a JSON reader for JSON files.
-func (f *s3file) createJSONReader(location string) (file.RowReader, error) {
+func (f *s3file) createJSONReader(location string) (any, error) {
 	status := statusErr
 
 	defer f.sendOperationStats(&FileLog{Operation: "JSON READER", Location: location, Status: &status}, time.Now())
@@ -97,7 +95,7 @@ func (f *s3file) createJSONReader(location string) (file.RowReader, error) {
 }
 
 // createTextCSVReader creates a text reader for reading text files.
-func (f *s3file) createTextCSVReader(location string) (file.RowReader, error) {
+func (f *s3file) createTextCSVReader(location string) (any, error) {
 	status := statusErr
 
 	defer f.sendOperationStats(&FileLog{Operation: "TEXT/CSV READER", Location: location, Status: &status}, time.Now())

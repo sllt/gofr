@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"mime"
 	"os"
 	"path"
@@ -15,8 +16,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-
-	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
 // Mkdir creates a directory and any necessary parent directories in the S3 bucket.
@@ -150,7 +149,7 @@ func getRelativepath(key, filePath string) string {
 // Note:
 //   - Directories are represented by the prefixes of the file keys in S3, and this method retrieves file entries
 //     only one level deep from the specified directory.
-func (f *fileSystem) ReadDir(name string) ([]file.FileInfo, error) {
+func (f *fileSystem) ReadDir(name string) ([]fs.FileInfo, error) {
 	var filePath, msg string
 
 	st := statusErr
@@ -181,7 +180,7 @@ func (f *fileSystem) ReadDir(name string) ([]file.FileInfo, error) {
 		return nil, err
 	}
 
-	var fileInfo []file.FileInfo
+	var fileInfo []fs.FileInfo
 
 	for i := range entries.Contents {
 		if i == 0 && filePath != "" {

@@ -11,8 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-
-	file "gofr.dev/pkg/gofr/datasource/file"
 )
 
 func Test_CreateRemoveFile(t *testing.T) {
@@ -37,7 +35,7 @@ func Test_CreateRemoveFile(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			runS3Test(t, func(fs file.FileSystemProvider) {
+			runS3Test(t, func(fs *fileSystem) {
 				if tt.removeAll {
 					err := fs.Mkdir("abc", os.ModePerm)
 					require.NoError(t, err, "TEST[%d] Failed. Desc %v", i, "Failed to create directory")
@@ -66,7 +64,7 @@ func Test_CreateRemoveFile(t *testing.T) {
 }
 
 func Test_OpenFile(t *testing.T) {
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		_, err := fs.Create("abc.json")
 		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to create file")
 
@@ -79,7 +77,7 @@ func Test_OpenFile(t *testing.T) {
 }
 
 func Test_MakingAndDeletingDirectories(t *testing.T) {
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		err := fs.MkdirAll("abc/bcd/cfg", os.ModePerm)
 		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Error creating directory")
 
@@ -124,7 +122,7 @@ func Test_RenameFile(t *testing.T) {
 		},
 	}
 
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		_, err := fs.Create("abcd.json")
 		require.NoError(t, err, "Failed to create initial file")
 
@@ -147,7 +145,7 @@ func Test_RenameFile(t *testing.T) {
 }
 
 func Test_RenameDirectory(t *testing.T) {
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		err := fs.Mkdir("abc/bcd/cfg", os.ModePerm)
 		require.NoError(t, err, "TEST[%d] Failed. Desc: %v:", 0, "Failed to create directory")
 
@@ -194,7 +192,7 @@ func Test_ReadDir(t *testing.T) {
 		},
 	}
 
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		// Setup
 		currentDir, err := fs.Getwd()
 		require.NoError(t, err, "Failed to get current directory")
@@ -239,7 +237,7 @@ func Test_StatFile(t *testing.T) {
 		isDir: false,
 	}
 
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		err := fs.Mkdir("dir1/dir2", os.ModePerm)
 		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to create directory")
 
@@ -271,7 +269,7 @@ func Test_StatDirectory(t *testing.T) {
 		isDir: false,
 	}
 
-	runS3Test(t, func(fs file.FileSystemProvider) {
+	runS3Test(t, func(fs *fileSystem) {
 		err := fs.Mkdir("dir1/dir2", os.ModePerm)
 		require.NoError(t, err, "TEST[%d] Failed. Desc: %v", 0, "Failed to create directory")
 
@@ -291,23 +289,17 @@ func Test_StatDirectory(t *testing.T) {
 }
 
 // Helper functions.
-func createBucket(t *testing.T, fs file.FileSystemProvider) {
+func createBucket(t *testing.T, fs *fileSystem) {
 	t.Helper()
 
-	f, ok := fs.(*fileSystem)
-	require.True(t, ok)
-
-	_, err := f.conn.CreateBucket(context.TODO(), &s3.CreateBucketInput{
+	_, err := fs.conn.CreateBucket(context.TODO(), &s3.CreateBucketInput{
 		Bucket: aws.String("gofr-bucket-2"),
 	})
 	require.NoError(t, err)
 }
 
-func deleteBucket(t *testing.T, fs file.FileSystemProvider) {
+func deleteBucket(t *testing.T, f *fileSystem) {
 	t.Helper()
-
-	f, ok := fs.(*fileSystem)
-	require.True(t, ok)
 
 	_, err := f.conn.DeleteBucket(context.TODO(), &s3.DeleteBucketInput{
 		Bucket: aws.String("gofr-bucket-2"),
@@ -315,7 +307,7 @@ func deleteBucket(t *testing.T, fs file.FileSystemProvider) {
 	require.NoError(t, err)
 }
 
-func runS3Test(t *testing.T, testFunc func(fs file.FileSystemProvider)) {
+func runS3Test(t *testing.T, testFunc func(f *fileSystem)) {
 	t.Helper()
 
 	cfg := Config{
@@ -333,6 +325,7 @@ func runS3Test(t *testing.T, testFunc func(fs file.FileSystemProvider)) {
 	mockLogger.EXPECT().Logf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Errorf(gomock.Any(), gomock.Any()).AnyTimes()
 	mockLogger.EXPECT().Debugf(gomock.Any(), gomock.Any()).AnyTimes()
+	mockLogger.EXPECT().Debug(gomock.Any()).AnyTimes()
 
 	s3Client := New(&cfg)
 
