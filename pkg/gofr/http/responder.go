@@ -58,20 +58,20 @@ func (r Responder) Respond(data any, err error) {
 		return
 	}
 
-	statusCode, errorObj := r.determineResponse(data, err)
+	statusCode, message := r.determineResponse(data, err)
 
 	switch v := data.(type) {
 	case resTypes.Raw:
 		resp = v.Data
 	case resTypes.Response:
-		resp = response{Data: v.Data, Metadata: v.Metadata, Error: errorObj}
+		resp = response{Code: statusCode, Message: message, Data: v.Data, Metadata: v.Metadata}
 	default:
 		// handling where an interface contains a nullable type with a nil value.
 		if isNil(data) {
 			data = nil
 		}
 
-		resp = response{Data: data, Error: errorObj}
+		resp = response{Code: statusCode, Message: message, Data: data}
 	}
 
 	if r.w.Header().Get("Content-Type") == "" {
@@ -83,19 +83,19 @@ func (r Responder) Respond(data any, err error) {
 	_ = json.NewEncoder(r.w).Encode(resp)
 }
 
-func (r Responder) determineResponse(data any, err error) (statusCode int, errObj any) {
+func (r Responder) determineResponse(data any, err error) (statusCode int, message string) {
 	// Handle empty struct case first
 	if err != nil && isEmptyStruct(data) {
-		return http.StatusInternalServerError, createErrorResponse(errEmptyResponse)
+		return http.StatusInternalServerError, errEmptyResponse.Error()
 	}
 
-	statusCode, errorObj := getStatusCode(r.method, data, err)
+	statusCode, message = getStatusCode(r.method, data, err)
 
 	if statusCode == 0 {
 		statusCode = http.StatusInternalServerError
 	}
 
-	return statusCode, errorObj
+	return statusCode, message
 }
 
 // isEmptyStruct checks if a value is a struct with all zero/empty fields.
@@ -126,35 +126,35 @@ func isEmptyStruct(data any) bool {
 	return reflect.DeepEqual(data, zero)
 }
 
-// getStatusCode returns corresponding HTTP status codes.
-func getStatusCode(method string, data any, err error) (statusCode int, errResp any) {
+// getStatusCode returns corresponding HTTP status codes and message.
+func getStatusCode(method string, data any, err error) (statusCode int, message string) {
 	if err == nil {
 		return handleSuccess(method, data)
 	}
 
 	if !isNil(data) {
-		return http.StatusPartialContent, createErrorResponse(err)
+		return http.StatusPartialContent, err.Error()
 	}
 
 	if e, ok := err.(StatusCodeResponder); ok {
-		return e.StatusCode(), createErrorResponse(err)
+		return e.StatusCode(), err.Error()
 	}
 
-	return http.StatusInternalServerError, createErrorResponse(err)
+	return http.StatusInternalServerError, err.Error()
 }
 
-func handleSuccess(method string, data any) (statusCode int, err any) {
+func handleSuccess(method string, data any) (statusCode int, message string) {
 	switch method {
 	case http.MethodPost:
 		if data != nil {
-			return http.StatusCreated, nil
+			return http.StatusCreated, "success"
 		}
 
-		return http.StatusAccepted, nil
+		return http.StatusAccepted, "success"
 	case http.MethodDelete:
-		return http.StatusNoContent, nil
+		return http.StatusNoContent, "success"
 	default:
-		return http.StatusOK, nil
+		return http.StatusOK, "success"
 	}
 }
 
@@ -182,11 +182,12 @@ func createErrorResponse(err error) map[string]any {
 	return resp
 }
 
-// response represents an HTTP response.
+// response represents an HTTP response with unified format.
 type response struct {
-	Error    any            `json:"error,omitempty"`
-	Metadata map[string]any `json:"metadata,omitempty"`
+	Code     int            `json:"code"`
+	Message  string         `json:"message"`
 	Data     any            `json:"data,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 type StatusCodeResponder interface {

@@ -39,7 +39,7 @@ func TestResponder(t *testing.T) {
 			desc:         "map response type",
 			data:         map[string]string{"key": "value"},
 			contentType:  "application/json",
-			expectedBody: []byte(`{"data":{"key":"value"}}`),
+			expectedBody: []byte(`{"code":200,"message":"success","data":{"key":"value"}}`),
 		},
 		{
 			desc: "gofr response type with metadata",
@@ -50,7 +50,7 @@ func TestResponder(t *testing.T) {
 				},
 			},
 			contentType:  "application/json",
-			expectedBody: []byte(`{"metadata":{"environment":"stage"},"data":"Hello World from new Server"}`),
+			expectedBody: []byte(`{"code":200,"message":"success","data":"Hello World from new Server","metadata":{"environment":"stage"}}`),
 		},
 		{
 			desc: "gofr response type without metadata",
@@ -58,7 +58,7 @@ func TestResponder(t *testing.T) {
 				Data: "Hello World from new Server",
 			},
 			contentType:  "application/json",
-			expectedBody: []byte(`{"data":"Hello World from new Server"}`),
+			expectedBody: []byte(`{"code":200,"message":"success","data":"Hello World from new Server"}`),
 		},
 	}
 
@@ -89,33 +89,33 @@ func TestResponder_getStatusCode(t *testing.T) {
 		data       any
 		err        error
 		statusCode int
-		errObj     any
+		message    string
 	}{
-		{"success case", http.MethodGet, "success response", nil, http.StatusOK, nil},
-		{"post with response body", http.MethodPost, "entity created", nil, http.StatusCreated, nil},
-		{"post with nil response", http.MethodPost, nil, nil, http.StatusAccepted, nil},
-		{"success delete", http.MethodDelete, nil, nil, http.StatusNoContent, nil},
+		{"success case", http.MethodGet, "success response", nil, http.StatusOK, "success"},
+		{"post with response body", http.MethodPost, "entity created", nil, http.StatusCreated, "success"},
+		{"post with nil response", http.MethodPost, nil, nil, http.StatusAccepted, "success"},
+		{"success delete", http.MethodDelete, nil, nil, http.StatusNoContent, "success"},
 		{"invalid route error", http.MethodGet, nil, ErrorInvalidRoute{}, http.StatusNotFound,
-			map[string]any{"message": ErrorInvalidRoute{}.Error()}},
+			ErrorInvalidRoute{}.Error()},
 		{"internal server error", http.MethodGet, nil, http.ErrHandlerTimeout, http.StatusInternalServerError,
-			map[string]any{"message": http.ErrHandlerTimeout.Error()}},
+			http.ErrHandlerTimeout.Error()},
 		{"partial content with error", http.MethodGet, "partial response", ErrorInvalidRoute{},
-			http.StatusPartialContent, map[string]any{"message": ErrorInvalidRoute{}.Error()}},
+			http.StatusPartialContent, ErrorInvalidRoute{}.Error()},
 		{"request timeout error", http.MethodGet, nil, ErrorRequestTimeout{},
 			http.StatusRequestTimeout,
-			map[string]any{"message": ErrorRequestTimeout{}.Error()}},
+			ErrorRequestTimeout{}.Error()},
 		{"client closed request error", http.MethodGet, nil, ErrorClientClosedRequest{}, 499,
-			map[string]any{"message": ErrorClientClosedRequest{}.Error()}},
+			ErrorClientClosedRequest{}.Error()},
 		{"server timeout error", http.MethodGet, nil, ErrorRequestTimeout{}, http.StatusRequestTimeout,
-			map[string]any{"message": ErrorRequestTimeout{}.Error()}},
+			ErrorRequestTimeout{}.Error()},
 	}
 
 	for i, tc := range tests {
-		statusCode, errObj := getStatusCode(tc.method, tc.data, tc.err)
+		statusCode, message := getStatusCode(tc.method, tc.data, tc.err)
 
 		assert.Equal(t, tc.statusCode, statusCode, "TEST[%d], Failed.\n%s", i, tc.desc)
 
-		assert.Equal(t, tc.errObj, errObj, "TEST[%d], Failed.\n%s", i, tc.desc)
+		assert.Equal(t, tc.message, message, "TEST[%d], Failed.\n%s", i, tc.desc)
 	}
 }
 
@@ -140,18 +140,18 @@ func TestRespondWithApplicationJSON(t *testing.T) {
 		expectedBody string
 	}{
 		{"sample data response", sampleData, nil,
-			http.StatusOK, `{"data":{"message":"Hello World"}}`},
+			http.StatusOK, `{"code":200,"message":"success","data":{"message":"Hello World"}}`},
 		{"error response", nil, sampleError,
-			http.StatusNotFound, `{"error":{"message":"route not registered"}}`},
+			http.StatusNotFound, `{"code":404,"message":"route not registered"}`},
 		{"error response contains a nullable type with a nil value", newNilTemp(), sampleError,
-			http.StatusNotFound, `{"error":{"message":"route not registered"}}`},
+			http.StatusNotFound, `{"code":404,"message":"route not registered"}`},
 		{"error response with partial response", sampleData, sampleError,
 			http.StatusPartialContent,
-			`{"error":{"message":"route not registered"},"data":{"message":"Hello World"}}`},
+			`{"code":206,"message":"route not registered","data":{"message":"Hello World"}}`},
 		{"client closed request - no response", nil, ErrorClientClosedRequest{},
-			StatusClientClosedRequest, `{"error":{"message":"client closed request"}}`},
+			StatusClientClosedRequest, `{"code":499,"message":"client closed request"}`},
 		{"server timeout error", nil, ErrorRequestTimeout{},
-			http.StatusRequestTimeout, `{"error":{"message":"request timed out"}}`},
+			http.StatusRequestTimeout, `{"code":408,"message":"request timed out"}`},
 	}
 
 	for i, tc := range tests {
@@ -240,11 +240,8 @@ func TestResponder_CustomErrorWithResponse(t *testing.T) {
 	require.NoError(t, err)
 
 	expectedJSON := `{
-		"error": {
-			"code": 404,
-			"title": "Custom Error",
-			"message": "resource not found"
-		}
+		"code": 404,
+		"message": "resource not found"
 	}`
 
 	assert.JSONEq(t, expectedJSON, string(bodyBytes))
@@ -281,10 +278,8 @@ func TestResponder_ReservedMessageField(t *testing.T) {
 	require.NoError(t, err)
 
 	expectedJSON := `{
-		"error": {
-			"message": "original message",
-			"info": "additional info"
-		}
+		"code": 500,
+		"message": "original message"
 	}`
 
 	assert.JSONEq(t, expectedJSON, string(bodyBytes))
@@ -303,10 +298,10 @@ func TestResponder_EmptyErrorStruct(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	responder := Responder{w: recorder, method: http.MethodGet}
 
-	statusCode, errObj := responder.determineResponse(nil, emptyError{})
+	statusCode, message := responder.determineResponse(nil, emptyError{})
 
 	assert.Equal(t, http.StatusInternalServerError, statusCode)
-	assert.Equal(t, map[string]any{"message": "error occurred"}, errObj)
+	assert.Equal(t, "error occurred", message)
 }
 
 func TestIsEmptyStruct(t *testing.T) {
@@ -404,7 +399,7 @@ func TestResponder_ClientClosedRequestHandling(t *testing.T) {
 	responder.Respond(nil, ErrorClientClosedRequest{})
 
 	assert.Equal(t, 499, recorder.Code)
-	assert.JSONEq(t, `{"error":{"message":"client closed request"}}`, recorder.Body.String())
+	assert.JSONEq(t, `{"code":499,"message":"client closed request"}`, recorder.Body.String())
 }
 
 func TestResponder_ContentTypePreservation(t *testing.T) {
